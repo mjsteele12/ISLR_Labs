@@ -40,7 +40,7 @@ summary(smarket.glm)$coef
 
 #the predict() function can be used to predict the probability that the direction will go up or down given values of the predictors. The "type = response" option tells
 #R to output the probabilities of the form P(Y = 1 |X), as opposed to other information such as the logit. If no data set is supplied to the predict() function,
-#R computes probability from the training data used to fit the model. Use indexing (I know this from python!) to ask for the first 10 predictions.
+#R computes probability from the training data used to fit the model. Use indexing to ask for the first 10 predictions.
 smarket.probs = predict(smarket.glm,type="response")
 smarket.probs[1:10]
 
@@ -71,17 +71,17 @@ dim(Smarket.2005)
 Direction.2005=Direction[!training_set]
 
 #Now lets fit a logit model using only the training set, and apply it to the 2005 dataset!
-train.fit=glm(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, data = Smarket, family = binomial, subset = training_set)
-train.probs=predict(train.fit,Smarket.2005, type="response")
+logit.fit=glm(Direction~Lag1+Lag2+Lag3+Lag4+Lag5+Volume, data = Smarket, family = binomial, subset = training_set)
+logit.probs=predict(train.fit,Smarket.2005, type="response")
 
 #Finally, we compare predictions for 2005 and actual movements of the markets over that period.
-train.pred=rep("Down",252)
-train.pred[train.probs >.5]="Up"
-table(train.pred,Direction.2005)
+logit.pred=rep("Down",252)
+logit.pred[logit.probs >.5]="Up"
+table(logit.pred,Direction.2005)
 
 #use mean() again to get fraction of correct predictions, or incorrect using !
-mean(train.pred==Direction.2005)
-mean(train.pred!=Direction.2005)
+mean(logit.pred==Direction.2005)
+mean(logit.pred!=Direction.2005)
 
 #if we want to predict returns associated with particular values of lag1 and lag2 (e.g. when lag1 and lag2 = 1.1 and 1.2 respectively) we do this using predict()
 glm.fit=glm(Direction~Lag1+Lag2,data = Smarket,family=binomial,subset=training_set)
@@ -97,5 +97,105 @@ library(MASS)
 lda.fit = lda(Direction~Lag1 + Lag2, data = Smarket, subset=training_set)
 lda.fit
 
-#The output indicates that 
+#The output indicates that 49% of the training observations correspond to days during which the market went down.
 
+#The predict function returns a list with three elements. First, class, contains LDA's predictions about movement of the market. Second
+#Posteriori, contains a matrix whose kth column belongs to the posterior proability that the corresponding observation belongs to the kth
+#class. Last, x, contains the linear discriminants, described earlier.
+lda.pred = predict(lda.fit, Smarket.2005)
+names(lda.pred)
+
+#Predictions are basically the same as logistic regression
+lda.class=lda.pred$class
+table(lda.class,Direction.2005)
+
+#Use 50% threshold to recreate predictions
+sum(lda.pred$posterior[,1]>=.5)
+sum(lda.pred$posterior[,1]<=.5)
+
+
+###########################################
+###4.6.4 Quadratic Discriminant Analysis###
+###########################################
+
+#Fit QDA to Smarket data using qda(), identical syntax to lda()
+qda.fit = qda(Direction ~ Lag1 + Lag2, data = Smarket, subset = training_set)
+qda.fit
+
+#QDA correctly predicts 60% of the time, suggesting the nonlinear model captures the true relationship much better
+qda.class = predict(qda.fit, Smarket.2005)$class
+table(qda.class, Direction.2005)
+
+################################
+###4.6.5 K-Nearest Neighbors ###
+################################
+
+library(class)
+
+#KNN() function requires 4 inputs: 1. training matrix. 2. test matrix. 3. training labels. 4. value for K, the number of neighbors
+#we can use cbind() to bind lag1 and lag2 variables together
+#create train
+train.X=cbind(Lag1, Lag2)[training_set,]
+
+#create test
+test.X=cbind(Lag1, Lag2)[!training_set,]
+
+#create training labels
+train.Direction=Direction[training_set]
+
+#set seed for reproducibility- if there is a tie based on number of neighbors.
+set.seed(1)
+
+#knn where k=1
+knn.pred = knn(train.X,test.X,train.Direction, k=1)
+table(knn.pred,Direction.2005)
+
+
+#try k = 3
+knn.pred =knn(train.X,test.X,train.Direction,k=3)
+table(knn.pred,Direction.2005)
+
+mean(knn.pred==Direction.2005)
+
+
+
+
+#################################################
+###4.6.6 Application to Caravan Insurance Data###
+#################################################
+
+#Dataset dimensions
+dim(Caravan)
+attach(Caravan)
+summary(Purchase)
+
+#standardize data- all variables have mean zero and standard deviation of one. This will allow all variables to be compared easier
+#because they are on the same scale. Compare var before and after.
+standardized.X=scale(Caravan[,-86])
+var(Caravan[,1])
+var(standardized.X[,1])
+
+
+#split into test set, with first 1,000 obs.
+test = 1:1000
+train.X=standardized.X[-test,]
+test.X=standardized.X[test,]
+train.Y=Purchase[-test]
+test.Y=Purchase[test]
+set.seed(1)
+
+#build knn
+knn.pred=knn(train.X,test.X,train.Y,k=1)
+mean(test.Y!=knn.pred)
+mean(test.Y!="No")
+
+
+table(knn.pred,test.Y)
+
+#Using k=3 significatnly improves performance
+knn.pred=knn(train.X,test.X,train.Y,k=3)
+table(knn.pred,test.Y)
+
+#k=5
+knn.pred=knn(train.X,test.X,train.Y,k=5)
+table(knn.pred,test.Y)

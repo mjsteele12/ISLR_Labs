@@ -11,11 +11,11 @@ library(ISLR)
 fix(Boston)
 names(Boston)
 
-#tells you more info about Boston
+#tells you more info about Boston dataset
 ?Boston
 
 #the basic structure for simple linear regression is: lm(y~x,data)
-lm.fit=lm(medv~lstat)
+lm.fit=lm(medv~lstat, Boston)
 
 #if we don't attach the dataset, you constantly have to use $ in order to specify 
 #where you are getting the variable, e.g. lm.fit=lm(Boston$medv~Boston$lstat)
@@ -33,12 +33,12 @@ coef(lm.fit)
 #displays confidence intervals for coefficients
 confint(lm.fit)
 
-#produces confidence intervals for the prediction of medv given a value of lstat.
-#Confidence intervals tell you about how well you have determined the mean. Assume that the data really are 
-#randomly sampled from a Gaussian distribution. If you do this many times, and calculate a confidence interval
-#of the mean from each sample, you'd expect about 95 % of those intervals to include  the true value of the
-#population mean. The key point is that the confidence interval tells you about the likely location of the 
-#true population parameter.
+# produces confidence intervals for the prediction of medv given a value of lstat.
+# Confidence intervals tell you about how well you have determined the mean. Assume that the data really are
+# randomly sampled from a Gaussian distribution. If you do this many times, and calculate a confidence interval
+# of the mean from each sample, you'd expect about 95 % of those intervals to include  the true value of the
+# population mean. The key point is that the confidence interval tells you about the likely location of the
+# true population parameter.
 predict(lm.fit,data.frame(lstat=(c(5,10,15))),
         interval = "confidence")
 
@@ -111,6 +111,7 @@ summary(mlm.fit1)
 #alternatively, you can update the function using update()
 mlm.fit1 = update(mlm.fit, ~.-age)
 summary(mlm.fit1)
+
 #########################
 ### Interaction Terms ###
 ########################
