@@ -100,4 +100,160 @@ test=(!train)
 bestfit = regsubsets(Salary~.,Hitters[train,],nvmax=19)
 
 #model matrix is used to build an x matrix from data, loop through it and extract coefficients
-test = model.matrix(Salary~.,data = Hitters[train,])
+testmodel = model.matrix(Salary~.,data = Hitters[train,])
+
+val.errors = rep(NA,19)
+for(i in 1:19) {
+  coefs=coef(bestfit,id=i)
+  pred=testmodel[,names(coefs)]%*%coefs
+  val.errors[i]=mean((Hitters$Salary[test]-pred)^2)
+}
+
+#view errors, find best model which is lowest, and view it's coefficients
+val.errors
+which.min(val.errors)
+coef(bestfit,10)
+
+#Since we can't use a predict() function with regsubsets we can define our own
+#This assumes our object will have a variable named call with at least 2 elements (yes 2, not 3 because R is weird)
+
+predict.regsubsets=function(object,newdata,id,...) {
+  form=as.formula(object$call[[2]])
+  mat=model.matrix(form,newdata) 
+  coefs=coef(object,id=id)
+  xvars=names(coefs)
+  mat[,xvars]%*%coefs
+}
+
+#perform best subset selection on entire dataset
+regfit.best=regsubsets(Salary~.,data = Hitters,nvmax=19)
+coef(regfit.best,10)
+
+#now try to choose among models using 10-fold cross validation
+set.seed(1)
+#set k
+k=10
+
+#create 10 folds
+folds = sample(1:k,nrow(Hitters),replace = TRUE)
+
+#matrix of error terms
+cv.errors = matrix(NA,k,19, dimnames=list(NULL, paste(1:19)))
+
+for(j in 1:k) {
+  best.fit=regsubsets(Salary~., data = Hitters[folds!=j,],nvmax = 19)
+  for(i in 1:19) {
+    pred=predict.regsubsets(best.fit,Hitters[folds==j,],id=i)
+    cv.errors[j,i]=mean((Hitters$Salary[folds==j]-pred)^2)
+    
+  }
+  
+}
+
+#This returns 10x19 matrix, we can use apply() to average over the columns and get cv error 
+mean.cv.errors=apply(cv.errors,2,mean)
+mean.cv.errors
+
+#from the plot we can see that the 11 variable model is best based on cv error
+par(mfrow=c(1,1))
+plot(mean.cv.errors,type='b')
+
+#now perform best subset selection on full data to obtain 11 variable model
+reg.best=regsubsets(Salary~.,data = Hitters, nvmax=19)
+coef(reg.best,11)
+
+
+#Lab2: Ridge Regression and Lasso
+
+#will use glmnet package, start by removing NA as done before
+#Hitters = na.omit(Hitters)
+x=model.matrix(Salary~.,Hitters)[,-1]
+y=Hitters$Salary
+
+#6.6.1 Ridge Regression
+
+#glmnet has an alpha parameter, if 0 then it will be ridge
+library(glmnet)
+
+#create a series of lambda values to try, this is the ridge hyperparameter that determines how much the coefficients will shrink
+grid=10^seq(10,-2,length=100)
+
+#fit
+ridge.mod=glmnet(x,y,alpha=0,lambda=grid)
+
+#we can see that it created 100 models
+dim(coef(ridge.mod))
+
+
+#split into train and test sets
+set.seed(1)
+train=sample(1:nrow(x),nrow(x)/2)
+test=(-train)
+y.test=y[test]
+
+
+#train new model
+ridge.mod=glmnet(x[train,],y[train],alpha=0,lambda=grid,thresh=1e-12)
+ridge.pred=predict(ridge.mod,s=4,newx=x[test,])
+mean((ridge.pred-y.test)^2)
+
+
+#best lambda value is 112
+set.seed(1)
+cv.out=cv.glmnet(x[train,],y[train],alpha=0)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+bestlam
+
+
+#6.6.2 Lasso
+#fit model
+lasso.mod=glmnet(x[train,],y[train], alpha = 1, lambda=grid)
+plot(lasso.mod)
+
+#fit cv model
+set.seed(1)
+cv.out=cv.glmnet(x[train,],y[train],alpha=1)
+plot(cv.out)
+bestlam=cv.out$lambda.min
+lasso.pred=predict(lasso.mod,s=bestlam,newx=x[test,])
+mean((lasso.pred-y.test)^2)
+
+
+
+#6.7 PCR and PLS regression
+
+#6.7.1 Principla components regression
+library(pls)
+set.seed(2)
+
+#default validation is 10 fold
+pcr.fit=pcr(Salary~., data = Hitters, scale=TRUE, validation="CV")
+
+summary(pcr.fit)
+
+#Plot cross validation scores with mean square error
+validationplot(pcr.fit,val.type="MSEP")
+
+set.seed(2)
+pcr.fit=pcr(Salary~., data= Hitters, subset=train,scale=TRUE, validation="CV")
+validationplot(pcr.fit, val.type = "MSEP")
+
+#Find lowest CV score with 7 principal components
+pcr.pred=predict(pcr.fit,x[test,],ncomp=7)
+mean((pcr.pred-y[test])^2)
+
+#fit on entire dataset
+pcr.fit=pcr(y~x,scale=TRUE,ncomp=7)
+summary(pcr.fit)
+
+
+#6.7.2 Partial Least Squares
+set.seed(1)
+pls.fit=plsr(Salary~., data = Hitters, subset=train,scale=TRUE, validation= "CV")
+summary(pls.fit)
+
+#predict
+pls.pred = predict(pls.fit,x[test,],ncomp=2)
+mean((pls.pred-y[test])^2)
+
